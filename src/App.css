@@ -164,8 +164,8 @@
 ========================= */
 
 .hero {
-  padding-top: 78px;
-  background: var(--green-soft);
+  background: #053c2b;
+  padding: 70px 0;
 }
 
 .hero-content {
@@ -186,7 +186,7 @@
 
 .eyebrow,
 .section-label {
-  color: var(--green);
+  color:rgb(20, 175, 0);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 1.7px;
@@ -194,7 +194,7 @@
 
 .hero h1 {
   margin: 19px 0;
-  color: var(--green-deep);
+  color:rgb(255, 255, 255);
   font-family: "Manrope", sans-serif;
   font-size: clamp(48px, 5vw, 75px);
   line-height: 0.99;
@@ -204,7 +204,7 @@
 
 .hero-copy > p {
   max-width: 520px;
-  color: #64716b;
+  color: rgb(20, 175, 0);
   font-size: 17px;
   line-height: 1.7;
 }
@@ -228,7 +228,7 @@
 }
 
 .btn-primary {
-  color: white;
+  color: rgb(255, 255, 255);
   background: var(--green);
 }
 
@@ -266,12 +266,12 @@
 }
 
 .hero-info strong {
-  color: var(--green-deep);
+  color: rgb(255, 255, 255);
   font-size: 22px;
 }
 
 .hero-info span {
-  color: #7a8580;
+  color: #ffea01;
   font-size: 12px;
 }
 
@@ -755,7 +755,7 @@
 }
 
 .auth-left-content > span {
-  color: #cfe8df;
+  color: rgb(20, 175, 0);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 2px;
@@ -772,7 +772,7 @@
 
 .auth-left-content p {
   max-width: 450px;
-  color: #bdd2ca;
+  color: rgb(20, 175, 0);
   line-height: 1.7;
   font-size: 15px;
 }
@@ -861,7 +861,7 @@
   padding: 14px 15px;
 
   color: #20332b;
-  background: #fbfcfb;
+  background: #fcfbfb;
   outline: none;
 
   font-size: 14px;
@@ -941,7 +941,7 @@
 
 .form-success {
   color: #267050;
-  background: #edf9f2;
+  background: #f9eded;
   border: 1px solid #cdebd9;
 }
 
@@ -2054,4 +2054,25 @@
   .form-section {
     padding: 22px;
   }
+}
+/* =========================
+   ACCESO ENTIDAD
+========================= */
+
+.nav-entity {
+  border-radius: 9px;
+  padding: 11px 17px;
+  color: #ffffff;
+  background: #c3a606;
+  border: 1px solid #c5c500;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.nav-entity:hover {
+  background: #056044;
+  border-color: #056044;
+  transform: translateY(-1px);
 }
