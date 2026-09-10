@@ -1,15 +1,77 @@
+import { useEffect, useState } from "react";
 import DashboardHeader from "../components/DashboardHeader";
 import StatusBadge from "../components/StatusBadge";
 import StatusTimeline from "../components/StatusTimeline";
+import { supabase } from "../lib/supabaseClient";
 
 function EntityReportDetail({
   currentEntity,
   selectedEntityReport,
-  users,
   setPage,
   updateReportStatus,
   handleEntityLogout,
 }) {
+  const [reporter, setReporter] = useState(null);
+  const [loadingReporter, setLoadingReporter] = useState(false);
+
+  /*
+    Obtener los datos del ciudadano directamente desde Supabase.
+    Solo se consulta cuando el reporte es identificado.
+  */
+  useEffect(() => {
+    const loadReporter = async () => {
+      setReporter(null);
+
+      if (
+        !selectedEntityReport ||
+        selectedEntityReport.modality !== "Identificado"
+      ) {
+        return;
+      }
+
+      setLoadingReporter(true);
+
+      try {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("report_contacts")
+          .select("name, email")
+          .eq(
+            "report_id",
+            selectedEntityReport.id
+          )
+          .maybeSingle();
+
+        if (error) {
+          console.error(
+            "Error al obtener los datos del ciudadano:",
+            error
+          );
+
+          setReporter(null);
+          return;
+        }
+
+        setReporter(data || null);
+
+      } catch (error) {
+        console.error(
+          "Error inesperado al obtener los datos del ciudadano:",
+          error
+        );
+
+        setReporter(null);
+
+      } finally {
+        setLoadingReporter(false);
+      }
+    };
+
+    loadReporter();
+  }, [selectedEntityReport]);
+
   if (!selectedEntityReport) {
     return (
       <div className="dashboard-page">
@@ -46,19 +108,6 @@ function EntityReportDetail({
       </div>
     );
   }
-
-  /*
-    Buscar el ciudadano relacionado con el reporte.
-    Solo se utilizará cuando el reporte sea identificado.
-  */
-  const reporter =
-    selectedEntityReport.modality === "Identificado"
-      ? users?.find(
-          (user) =>
-            String(user.id) ===
-            String(selectedEntityReport.userId)
-        )
-      : null;
 
   return (
     <div className="dashboard-page">
@@ -176,7 +225,18 @@ function EntityReportDetail({
           {selectedEntityReport.modality ===
           "Identificado" ? (
 
-            reporter ? (
+            loadingReporter ? (
+
+              <p
+                style={{
+                  marginTop: "15px",
+                }}
+              >
+                Cargando datos del ciudadano...
+              </p>
+
+            ) : reporter ? (
+
               <div
                 style={{
                   marginTop: "18px",
@@ -212,6 +272,7 @@ function EntityReportDetail({
                 </div>
 
               </div>
+
             ) : (
 
               <p

@@ -280,6 +280,107 @@ function App() {
 
 
   /* =========================================================
+     CARGAR REPORTES DEL CIUDADANO DESDE SUPABASE
+  ========================================================= */
+
+  useEffect(() => {
+
+    const loadCitizenReports = async () => {
+
+      if (!currentUser?.id) {
+        return;
+      }
+
+      if (
+        page !== "dashboard" &&
+        page !== "my-reports" &&
+        page !== "report-detail"
+      ) {
+        return;
+      }
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("reports")
+        .select(`
+          id,
+          user_id,
+          entity_id,
+          category,
+          description,
+          location,
+          evidence_url,
+          modality,
+          status,
+          created_at,
+          entities (
+            name
+          )
+        `)
+        .eq("user_id", currentUser.id)
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (error) {
+        console.error(
+          "Error cargando reportes del ciudadano:",
+          error
+        );
+        return;
+      }
+
+      const formattedReports = (data || []).map(
+        (report) => ({
+          id: report.id,
+          userId: report.user_id,
+          entityId: report.entity_id,
+          entity:
+            report.entities?.name ||
+            "Entidad responsable",
+          category: report.category,
+          description: report.description,
+          location: report.location,
+          evidence: report.evidence_url || "",
+          modality: report.modality,
+          status: report.status,
+          date: new Date(
+            report.created_at
+          ).toLocaleDateString("es-CO"),
+          createdAt: report.created_at,
+        })
+      );
+
+      setReports(formattedReports);
+      localStorage.setItem(
+        "rb_reports",
+        JSON.stringify(formattedReports)
+      );
+
+      if (selectedReport) {
+        const refreshedSelectedReport =
+          formattedReports.find(
+            (report) =>
+              String(report.id) ===
+              String(selectedReport.id)
+          );
+
+        if (refreshedSelectedReport) {
+          setSelectedReport(
+            refreshedSelectedReport
+          );
+        }
+      }
+    };
+
+    loadCitizenReports();
+
+  }, [currentUser, page]);
+
+
+  /* =========================================================
      ENTIDAD ACTUAL
   ========================================================= */
 
