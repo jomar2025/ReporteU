@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import { supabase } from "./lib/supabaseClient";
 
 /* =========================
    PÁGINAS CIUDADANAS
@@ -24,7 +25,7 @@ import EntityReportDetail from "./entity/EntityReportDetail";
 
 
 function App() {
-
+  console.log("Supabase conectado:", !!supabase);
   /* =========================================================
      NAVEGACIÓN
   ========================================================= */
@@ -179,42 +180,11 @@ function App() {
      ENTIDADES
   ========================================================= */
 
-  const entities = [
-
-    {
-      id: "triple-a",
-      name: "Triple A",
-      email: "triplea@reportabarranquilla.local",
-      password: "TripleA123",
-    },
-
-    {
-      id: "a-ire",
-      name: "A-IRE",
-      email: "aire@reportabarranquilla.local",
-      password: "Aire123",
-    },
-
-    {
-      id: "obras-publicas",
-      name:
-        "Secretaría de Obras Públicas de la Alcaldía Distrital",
-      email:
-        "obras@reportabarranquilla.local",
-      password: "Obras123",
-    },
-
-    {
-      id: "alcaldia",
-      name:
-        "Alcaldía Distrital de Barranquilla",
-      email:
-        "alcaldia@reportabarranquilla.local",
-      password: "Alcaldia123",
-    },
-
-  ];
-
+  /*
+     Las entidades ya no manejan credenciales dentro del código.
+     Sus cuentas y relaciones con profiles/entities se gestionan
+     directamente desde Supabase Auth + la base de datos.
+  */
 
   const [currentEntity, setCurrentEntity] =
     useState(() => {
@@ -254,6 +224,9 @@ function App() {
     selectedEntityReport,
     setSelectedEntityReport,
   ] = useState(null);
+
+  const [entityReports, setEntityReports] =
+    useState([]);
 
 
   /* =========================================================
@@ -400,43 +373,46 @@ function App() {
      LOGIN CIUDADANO
   ========================================================= */
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
 
-    e.preventDefault();
+  e.preventDefault();
 
-    setLoginError("");
+  setLoginError("");
+  setSuccessMessage("");
 
-    setSuccessMessage("");
+  const email =
+    loginForm.email
+      .trim()
+      .toLowerCase();
 
-    const email =
-      loginForm.email
-        .trim()
-        .toLowerCase();
+  const password =
+    loginForm.password;
 
+  if (!email || !password) {
 
-    if (
-      !email ||
-      !loginForm.password
-    ) {
-
-      setLoginError(
-        "Completa el correo electrónico y la contraseña."
-      );
-
-      return;
-    }
-
-
-    const user = users.find(
-      (item) =>
-        item.email.toLowerCase() ===
-          email &&
-        item.password ===
-          loginForm.password
+    setLoginError(
+      "Completa el correo electrónico y la contraseña."
     );
 
+    return;
+  }
 
-    if (!user) {
+  try {
+
+    const {
+      data,
+      error,
+    } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+
+      console.error(
+        "Error de inicio de sesión:",
+        error
+      );
 
       setLoginError(
         "Correo electrónico o contraseña incorrectos."
@@ -445,133 +421,316 @@ function App() {
       return;
     }
 
+    const authUser =
+      data?.user;
 
-    setCurrentUser(user);
+    if (!authUser) {
+
+      setLoginError(
+        "No se pudo iniciar la sesión."
+      );
+
+      return;
+    }
+
+    /*
+      Obtener el perfil del ciudadano
+    */
+
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select("id, name, role")
+      .eq("id", authUser.id)
+      .single();
+
+    if (profileError) {
+
+      console.error(
+        "Error al obtener el perfil:",
+        profileError
+      );
+
+      setLoginError(
+        "La cuenta existe, pero no se pudo cargar el perfil."
+      );
+
+      return;
+    }
+
+    /*
+      Crear el usuario que utiliza
+      temporalmente la interfaz actual
+    */
+
+    const loggedUser = {
+
+      id: authUser.id,
+
+      name:
+        profile?.name ||
+        authUser.user_metadata?.name ||
+        authUser.email,
+
+      email:
+        authUser.email,
+
+      createdAt:
+        authUser.created_at,
+
+    };
+
+    setCurrentUser(
+      loggedUser
+    );
+
+    /*
+      Esto lo mantenemos temporalmente
+      mientras terminamos de migrar
+      todas las partes del proyecto.
+    */
 
     localStorage.setItem(
       "rb_current_user",
-      JSON.stringify(user)
+      JSON.stringify(loggedUser)
     );
-
 
     setLoginForm({
       email: "",
       password: "",
     });
 
-
     setPage("dashboard");
 
-  };
+  } catch (error) {
+
+    console.error(
+      "Error inesperado al iniciar sesión:",
+      error
+    );
+
+    setLoginError(
+      "Ocurrió un error al iniciar sesión."
+    );
+
+  }
+
+};
 
 
   /* =========================================================
      REGISTRO CIUDADANO
   ========================================================= */
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
 
-    e.preventDefault();
+  e.preventDefault();
 
-    setRegisterError("");
+  setRegisterError("");
+  setSuccessMessage("");
 
-    setSuccessMessage("");
+  const name =
+    registerForm.name.trim();
 
+  const email =
+    registerForm.email
+      .trim()
+      .toLowerCase();
 
-    const name =
-      registerForm.name.trim();
+  const password =
+    registerForm.password;
 
-    const email =
-      registerForm.email
-        .trim()
-        .toLowerCase();
-
-    const password =
-      registerForm.password;
-
-    const confirmPassword =
-      registerForm.confirmPassword;
+  const confirmPassword =
+    registerForm.confirmPassword;
 
 
-    if (
-      !name ||
-      !email ||
-      !password ||
-      !confirmPassword
-    ) {
+  if (
+    !name ||
+    !email ||
+    !password ||
+    !confirmPassword
+  ) {
 
-      setRegisterError(
-        "Completa todos los campos."
-      );
+    setRegisterError(
+      "Completa todos los campos."
+    );
 
-      return;
-    }
-
-
-    if (
-      password.length < 6
-    ) {
-
-      setRegisterError(
-        "La contraseña debe tener mínimo 6 caracteres."
-      );
-
-      return;
-    }
+    return;
+  }
 
 
-    if (
-      password !==
-      confirmPassword
-    ) {
+  if (
+    password.length < 6
+  ) {
 
-      setRegisterError(
-        "Las contraseñas no coinciden."
-      );
+    setRegisterError(
+      "La contraseña debe tener mínimo 6 caracteres."
+    );
 
-      return;
-    }
-
-
-    const exists =
-      users.some(
-        (item) =>
-          item.email
-            .toLowerCase() ===
-          email
-      );
+    return;
+  }
 
 
-    if (exists) {
+  if (
+    password !==
+    confirmPassword
+  ) {
 
-      setRegisterError(
-        "Ya existe una cuenta con este correo."
-      );
+    setRegisterError(
+      "Las contraseñas no coinciden."
+    );
 
-      return;
-    }
+    return;
+  }
 
 
-    const newUser = {
+  try {
 
-      id: Date.now(),
+    /*
+      CREAR USUARIO EN SUPABASE AUTH
+    */
 
-      name,
+    const {
+      data,
+      error,
+    } = await supabase.auth.signUp({
 
       email,
 
       password,
 
+      options: {
+        data: {
+          name,
+        },
+      },
+
+    });
+
+
+    if (error) {
+
+      console.error(
+        "Error al registrar usuario:",
+        error
+      );
+
+      setRegisterError(
+        error.message ||
+        "No fue posible crear la cuenta."
+      );
+
+      return;
+    }
+
+
+    const authUser =
+      data?.user;
+
+
+    if (!authUser) {
+
+      setRegisterError(
+        "No se pudo obtener el usuario creado."
+      );
+
+      return;
+    }
+
+
+    /*
+      CREAR PERFIL DEL CIUDADANO
+    */
+
+    const {
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .insert({
+
+        id: authUser.id,
+
+        name,
+
+        role: "citizen",
+
+        entity_id: null,
+
+      });
+
+
+    if (profileError) {
+
+      console.error(
+        "Error al crear perfil:",
+        profileError
+      );
+
+      /*
+        Si el usuario ya fue creado en Auth,
+        informamos del problema del perfil.
+      */
+
+      setRegisterError(
+        "La cuenta fue creada, pero no se pudo completar el perfil."
+      );
+
+      return;
+    }
+
+
+    /*
+      OBJETO TEMPORAL PARA LA INTERFAZ ACTUAL
+    */
+
+    const newUser = {
+
+      id: authUser.id,
+
+      name,
+
+      email,
+
       createdAt:
+        authUser.created_at ||
         new Date().toISOString(),
 
     };
 
 
-    saveUsers([
-      ...users,
+    /*
+      Mantenemos temporalmente
+      la lista local de usuarios para
+      no romper las partes que todavía
+      estamos migrando.
+    */
+
+    const updatedUsers = [
+      ...users.filter(
+        (user) =>
+          user.email?.toLowerCase() !==
+          email
+      ),
       newUser,
-    ]);
+    ];
+
+
+    saveUsers(
+      updatedUsers
+    );
+
+
+    setCurrentUser(
+      newUser
+    );
+
+
+    localStorage.setItem(
+      "rb_current_user",
+      JSON.stringify(newUser)
+    );
 
 
     setRegisterForm({
@@ -585,13 +744,29 @@ function App() {
 
 
     setSuccessMessage(
-      "Cuenta creada correctamente. Ahora puedes iniciar sesión."
+      "Cuenta creada correctamente."
     );
 
 
-    setPage("login");
+    setPage(
+      "dashboard"
+    );
 
-  };
+
+  } catch (error) {
+
+    console.error(
+      "Error inesperado:",
+      error
+    );
+
+    setRegisterError(
+      "Ocurrió un error al crear la cuenta."
+    );
+
+  }
+
+};
 
 
   /* =========================================================
@@ -626,7 +801,7 @@ function App() {
      LOGIN ENTIDAD
   ========================================================= */
 
-  const handleEntityLogin = (e) => {
+  const handleEntityLogin = async (e) => {
 
     e.preventDefault();
 
@@ -637,11 +812,10 @@ function App() {
         .trim()
         .toLowerCase();
 
+    const password =
+      entityForm.password;
 
-    if (
-      !email ||
-      !entityForm.password
-    ) {
+    if (!email || !password) {
 
       setEntityError(
         "Completa el correo institucional y la contraseña."
@@ -650,56 +824,211 @@ function App() {
       return;
     }
 
+    try {
 
-    const entity =
-      entities.find(
-        (item) =>
-          item.email.toLowerCase() ===
-            email &&
-          item.password ===
-            entityForm.password
+      const {
+        data: authData,
+        error: authError,
+      } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+
+        console.error(
+          "Error de inicio de sesión de entidad:",
+          authError
+        );
+
+        setEntityError(
+          "Credenciales de entidad incorrectas."
+        );
+
+        return;
+      }
+
+      const authUser = authData?.user;
+
+      if (!authUser) {
+
+        setEntityError(
+          "No se pudo iniciar la sesión de la entidad."
+        );
+
+        return;
+      }
+
+      /* Obtener el perfil institucional */
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase
+        .from("profiles")
+        .select("id, name, role, entity_id")
+        .eq("id", authUser.id)
+        .single();
+
+      if (profileError || !profile) {
+
+        console.error(
+          "Error al obtener el perfil de entidad:",
+          profileError
+        );
+
+        setEntityError(
+          "La cuenta existe, pero no tiene un perfil de entidad válido."
+        );
+
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (
+        profile.role !== "entity" ||
+        !profile.entity_id
+      ) {
+
+        setEntityError(
+          "Esta cuenta no está configurada como entidad."
+        );
+
+        await supabase.auth.signOut();
+        return;
+      }
+
+      /* Obtener la entidad asociada al perfil */
+      const {
+        data: entity,
+        error: entityError,
+      } = await supabase
+        .from("entities")
+        .select("id, name, email")
+        .eq("id", profile.entity_id)
+        .single();
+
+      if (entityError || !entity) {
+
+        console.error(
+          "Error al obtener la entidad:",
+          entityError
+        );
+
+        setEntityError(
+          "No se encontró la entidad asociada a esta cuenta."
+        );
+
+        await supabase.auth.signOut();
+        return;
+      }
+
+      setCurrentEntity(entity);
+      setEntityForm({
+        email: "",
+        password: "",
+      });
+      setSelectedEntityReport(null);
+      setPage("entity-dashboard");
+
+    } catch (error) {
+
+      console.error(
+        "Error inesperado en login de entidad:",
+        error
       );
-
-
-    if (!entity) {
 
       setEntityError(
-        "Credenciales de entidad incorrectas."
+        "Ocurrió un error al iniciar sesión."
       );
 
-      return;
     }
 
-
-    setCurrentEntity(entity);
-
-    localStorage.setItem(
-      "rb_current_entity",
-      JSON.stringify(entity)
-    );
-
-
-    setEntityForm({
-      email: "",
-      password: "",
-    });
-
-
-    setPage(
-      "entity-dashboard"
-    );
-
   };
+
+
+  /* =========================================================
+     CARGAR REPORTES DE LA ENTIDAD
+  ========================================================= */
+
+  useEffect(() => {
+
+    const loadEntityReports = async () => {
+
+      if (!currentEntity?.id) {
+        setEntityReports([]);
+        return;
+      }
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("reports")
+        .select(`
+          id,
+          user_id,
+          entity_id,
+          category,
+          description,
+          location,
+          evidence_url,
+          modality,
+          status,
+          created_at
+        `)
+        .eq("entity_id", currentEntity.id)
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (error) {
+
+        console.error(
+          "Error cargando reportes de entidad:",
+          error
+        );
+
+        setEntityReports([]);
+        return;
+      }
+
+      const formattedReports =
+        (data || []).map((report) => ({
+          id: report.id,
+          userId: report.user_id,
+          entityId: report.entity_id,
+          entity: currentEntity.name,
+          category: report.category,
+          description: report.description,
+          location: report.location,
+          evidence: report.evidence_url || "",
+          modality: report.modality,
+          status: report.status,
+          date: new Date(
+            report.created_at
+          ).toLocaleDateString("es-CO"),
+          createdAt: report.created_at,
+        }));
+
+      setEntityReports(formattedReports);
+
+    };
+
+    loadEntityReports();
+
+  }, [currentEntity]);
 
 
   /* =========================================================
      CERRAR SESIÓN ENTIDAD
   ========================================================= */
 
-  const handleEntityLogout = () => {
+  const handleEntityLogout = async () => {
+
+    await supabase.auth.signOut();
 
     setCurrentEntity(null);
-
+    setEntityReports([]);
     setSelectedEntityReport(null);
 
     localStorage.removeItem(
@@ -901,83 +1230,239 @@ function App() {
      CREAR REPORTE
   ========================================================= */
 
-  const createReport = (e) => {
+ const createReport = async (e) => {
 
-    e.preventDefault();
+  e.preventDefault();
 
-    setReportError("");
+  setReportError("");
+  setSuccessMessage("");
 
-    setSuccessMessage("");
+  if (!currentUser) {
 
+    setPage("login");
 
-    if (!currentUser) {
+    return;
+  }
 
-      setPage("login");
+  if (
+    !reportForm.category ||
+    !reportForm.description.trim() ||
+    !reportForm.location.trim()
+  ) {
 
-      return;
-    }
+    setReportError(
+      "Completa la categoría, descripción y ubicación."
+    );
 
+    return;
+  }
 
-    if (
-      !reportForm.category ||
-      !reportForm.description.trim() ||
-      !reportForm.location.trim()
-    ) {
+  try {
+
+    /*
+      1. Determinar la entidad responsable
+      según la categoría.
+    */
+
+    const responsibleEntity =
+      getResponsibleEntity(
+        reportForm.category
+      );
+
+    /*
+      2. Buscar el ID de la entidad
+      en Supabase.
+    */
+
+    const {
+      data: entity,
+      error: entityError,
+    } = await supabase
+      .from("entities")
+      .select("id, name")
+      .eq("name", responsibleEntity)
+      .single();
+
+    if (entityError || !entity) {
+
+      console.error(
+        "Error al buscar entidad:",
+        entityError
+      );
 
       setReportError(
-        "Completa la categoría, descripción y ubicación."
+        "No se pudo determinar la entidad responsable del reporte."
       );
 
       return;
     }
 
+    /*
+      3. Crear el reporte en Supabase.
+    */
 
-    const newReport = {
+    const {
+      data: createdReport,
+      error: reportInsertError,
+    } = await supabase
+      .from("reports")
+      .insert({
+        user_id: currentUser.id,
 
-      id: Date.now(),
+        entity_id: entity.id,
+
+        category:
+          reportForm.category,
+
+        description:
+          reportForm.description.trim(),
+
+        location:
+          reportForm.location.trim(),
+
+        evidence_url:
+          reportForm.evidence || null,
+
+        modality:
+          reportForm.modality,
+
+        status:
+          "Reportado",
+      })
+      .select()
+      .single();
+
+    if (reportInsertError) {
+
+      console.error(
+        "Error al crear reporte:",
+        reportInsertError
+      );
+
+      setReportError(
+        "No fue posible registrar el reporte."
+      );
+
+      return;
+    }
+
+    /*
+      4. Si el reporte es identificado,
+      guardar sus datos de contacto.
+    */
+
+    if (
+      reportForm.modality ===
+      "Identificado"
+    ) {
+
+      const {
+        error: contactError,
+      } = await supabase
+        .from("report_contacts")
+        .insert({
+
+          report_id:
+            createdReport.id,
+
+          user_id:
+            currentUser.id,
+
+          name:
+            currentUser.name,
+
+          email:
+            currentUser.email,
+
+        });
+
+      if (contactError) {
+
+        console.error(
+          "Error al guardar datos del ciudadano:",
+          contactError
+        );
+
+        /*
+          El reporte ya fue creado.
+          Avisamos del problema adicional.
+        */
+
+        setReportError(
+          "El reporte fue creado, pero no se pudieron guardar los datos del ciudadano."
+        );
+
+        return;
+      }
+    }
+
+    /*
+      5. Añadir también el reporte al estado
+      local temporal para que la interfaz
+      siga funcionando mientras terminamos
+      la migración.
+    */
+
+    const localReport = {
+
+      id:
+        createdReport.id,
 
       userId:
         currentUser.id,
 
       category:
-        reportForm.category,
+        createdReport.category,
 
       description:
-        reportForm.description.trim(),
+        createdReport.description,
 
       location:
-        reportForm.location.trim(),
+        createdReport.location,
 
       evidence:
         reportForm.evidence || "",
 
       modality:
-        reportForm.modality,
+        createdReport.modality,
 
       entity:
-        getResponsibleEntity(
-          reportForm.category
-        ),
+        responsibleEntity,
+
+      entityId:
+        entity.id,
 
       status:
-        "Reportado",
+        createdReport.status,
 
       date:
-        new Date().toLocaleDateString(
+        new Date(
+          createdReport.created_at
+        ).toLocaleDateString(
           "es-CO"
         ),
 
       createdAt:
-        new Date().toISOString(),
+        createdReport.created_at,
 
     };
 
+    /*
+      Mantener temporalmente la lista local.
+    */
 
-    saveReports([
-      newReport,
+    const updatedReports = [
+      localReport,
       ...reports,
-    ]);
+    ];
 
+    saveReports(
+      updatedReports
+    );
+
+    /*
+      6. Limpiar formulario.
+    */
 
     setReportForm({
 
@@ -989,20 +1474,32 @@ function App() {
 
     });
 
-
     setEvidencePreview("");
 
     setReportError("");
-
 
     setSuccessMessage(
       "Tu reporte fue registrado correctamente."
     );
 
+    setPage(
+      "my-reports"
+    );
 
-    setPage("my-reports");
+  } catch (error) {
 
-  };
+    console.error(
+      "Error inesperado al crear reporte:",
+      error
+    );
+
+    setReportError(
+      "Ocurrió un error al registrar el reporte."
+    );
+
+  }
+
+};
 
 
   /* =========================================================
@@ -1015,19 +1512,6 @@ function App() {
         currentUser &&
         report.userId ===
           currentUser.id
-    );
-
-
-  /* =========================================================
-     REPORTES DE ENTIDAD
-  ========================================================= */
-
-  const entityReports =
-    reports.filter(
-      (report) =>
-        currentEntity &&
-        report.entity ===
-          currentEntity.name
     );
 
 
@@ -1081,64 +1565,105 @@ function App() {
      ACTUALIZAR ESTADO
   ========================================================= */
 
-  const updateReportStatus = (
+  const updateReportStatus = async (
     reportId,
     newStatus
   ) => {
 
-    if (!currentEntity) {
+    if (!currentEntity?.id) {
       return;
     }
 
+    try {
 
-    const targetReport =
-      reports.find(
-        (report) =>
-          report.id ===
-          reportId
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("reports")
+        .update({
+          status: newStatus,
+        })
+        .eq("id", reportId)
+        .eq("entity_id", currentEntity.id)
+        .select(`
+          id,
+          user_id,
+          entity_id,
+          category,
+          description,
+          location,
+          evidence_url,
+          modality,
+          status,
+          created_at
+        `)
+        .single();
+
+      if (error) {
+
+        console.error(
+          "Error actualizando estado:",
+          error
+        );
+
+        alert(
+          "No se pudo actualizar el estado del reporte."
+        );
+
+        return;
+      }
+
+      const updatedReport = {
+        id: data.id,
+        userId: data.user_id,
+        entityId: data.entity_id,
+        entity: currentEntity.name,
+        category: data.category,
+        description: data.description,
+        location: data.location,
+        evidence: data.evidence_url || "",
+        modality: data.modality,
+        status: data.status,
+        date: new Date(
+          data.created_at
+        ).toLocaleDateString("es-CO"),
+        createdAt: data.created_at,
+      };
+
+      setEntityReports((prevReports) =>
+        prevReports.map((report) =>
+          String(report.id) === String(reportId)
+            ? updatedReport
+            : report
+        )
       );
 
-
-    if (
-      !targetReport ||
-      targetReport.entity !==
-        currentEntity.name
-    ) {
-
-      return;
-    }
-
-
-    const updatedReports =
-      reports.map(
-        (report) =>
-          report.id ===
-          reportId
+      setReports((prevReports) =>
+        prevReports.map((report) =>
+          String(report.id) === String(reportId)
             ? {
                 ...report,
-                status:
-                  newStatus,
+                status: data.status,
               }
             : report
+        )
       );
 
+      setSelectedEntityReport(updatedReport);
 
-    saveReports(
-      updatedReports
-    );
+    } catch (error) {
 
-
-    const updatedReport =
-      updatedReports.find(
-        (report) =>
-          report.id ===
-          reportId
+      console.error(
+        "Error inesperado actualizando estado:",
+        error
       );
 
+      alert(
+        "Ocurrió un error al actualizar el estado."
+      );
 
-    setSelectedEntityReport(
-      updatedReport
-    );
+    }
 
   };
 
